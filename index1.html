@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ED CIA 3 Prototype</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>s
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; background-color: #020617; color: white; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Error Box Styles */
+        #error-boundary { display: none; padding: 20px; background: #450a0a; color: #fecaca; border: 1px solid #ef4444; margin: 20px; font-family: monospace; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <div id="error-boundary"></div>
+
+    <!-- Error Handler Script -->
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            const errorBox = document.getElementById('error-boundary');
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `<strong>System Error:</strong><br>${message}<br><small>${source}:${lineno}</small>`;
+            console.error(error);
+        };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, cloneElement, Fragment } = React;
+
+        // --- ICONS ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Layers = (props) => <Icon {...props} path={<Fragment><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></Fragment>} />;
+        const Activity = (props) => <Icon {...props} path={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />} />;
+        const AlertTriangle = (props) => <Icon {...props} path={<Fragment><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></Fragment>} />;
+        const MapIcon = (props) => <Icon {...props} path={<Fragment><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></Fragment>} />;
+        const Database = (props) => <Icon {...props} path={<Fragment><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></Fragment>} />;
+        const ShieldCheck = (props) => <Icon {...props} path={<Fragment><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></Fragment>} />;
+        const Sparkles = (props) => <Icon {...props} path={<Fragment><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 9h4" /><path d="M3 5h4" /></Fragment>} />;
+        const X = (props) => <Icon {...props} path={<Fragment><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Fragment>} />;
+        const Loader2 = (props) => <Icon {...props} path={<path d="M21 12a9 9 0 1 1-6.219-8.56" />} />;
+        const TrendingUp = (props) => <Icon {...props} path={<Fragment><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></Fragment>} />;
+        const Heart = (props) => <Icon {...props} path={<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />} />;
+
+        // --- PROCEDURAL ENGINE ---
+        const generateCity = () => {
+          try {
+              const buildings = [];
+              const pipes = [];
+              
+              for (let i = 0; i < 18; i++) {
+                buildings.push({
+                  id: `BLD-${i + 100}`,
+                  x: Math.random() * 80 + 5,
+                  y: Math.random() * 80 + 5,
+                  width: Math.random() * 10 + 8,
+                  height: Math.random() * 10 + 8,
+                  rotation: Math.random() * 15 - 7.5
+                });
+              }
+
+              const hubs = [];
+              for (let i = 0; i < 12; i++) {
+                hubs.push({ x: Math.random() * 90 + 5, y: Math.random() * 90 + 5 });
+              }
+
+              let pipeCounter = 400;
+              
+              const createCurvedPath = (p1, p2, irregularity) => {
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+                const cx = midX + (Math.random() - 0.5) * irregularity;
+                const cy = midY + (Math.random() - 0.5) * irregularity;
+                return `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`;
+              };
+
+              const createPipe = (p1, p2, type) => {
+                const isWater = type === 'water';
+                const isGas = type === 'gas';
+                const riskBase = Math.random() * 20;
+                
+                return {
+                  id: `${type.toUpperCase()}-${pipeCounter++}`,
+                  type,
+                  start: p1,
+                  end: p2,
+                  pathData: createCurvedPath(p1, p2, 15),
+                  depth: isWater ? 2.5 : 1.5,
+                  material: isWater ? 'Cast Iron' : (isGas ? 'Steel' : 'Conduit'),
+                  installDate: `19${Math.floor(Math.random() * 40 + 60)}-05-12`,
+                  insarShift: Math.random() * 3,
+                  thermalAnomaly: Math.random() > 0.85 ? Math.random() * 4 : 0,
+                  gprReflection: Math.random() > 0.6 ? 'noisy' : 'clear',
+                  riskScore: Math.floor(riskBase + (Math.random() * 20)),
+                  prediction: 'Stable',
+                  integrity: Math.floor(100 - riskBase),
+                  corrosion: Math.floor(Math.random() * 30)
+                };
+              };
+
+              hubs.forEach((hub, i) => {
+                hubs.slice(i + 1, i + 3).forEach(target => {
+                  if (Math.random() > 0.3) {
+                    pipes.push(createPipe(hub, target, Math.random() > 0.5 ? 'water' : 'gas'));
+                  }
+                });
+              });
+
+              pipes.push(createPipe({x:0, y:20}, {x:100, y:30}, 'electric'));
+              pipes.push(createPipe({x:10, y:0}, {x:20, y:100}, 'water'));
+              
+              if (pipes.length > 0) {
+                const idx = Math.floor(Math.random() * pipes.length);
+                pipes[idx].id = 'CRITICAL-FAIL';
+                pipes[idx].riskScore = 96;
+                pipes[idx].insarShift = 18.2;
+                pipes[idx].thermalAnomaly = 8.5; 
+                pipes[idx].gprReflection = 'hyperbolic';
+                pipes[idx].prediction = 'CRITICAL: Shear Failure';
+                pipes[idx].integrity = 12;
+                pipes[idx].corrosion = 85;
+              }
+
+              return { buildings, pipes };
+          } catch(e) {
+              console.error("City Gen Error", e);
+              return { buildings: [], pipes: [] };
+          }
+        };
+
+        const CITY_DATA = generateCity();
+
+        // --- GEMINI API ---
+        const callGemini = async (prompt) => {
+          const apiKey = ""; // API Key 
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            if (!response.ok) throw new Error('API Call failed');
+            const data = await response.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available.";
+          } catch (error) {
+            return "Error generating analysis. Please try again.";
+          }
+        };
+
+        // --- COMPONENTS ---
+        function NavIcon({ icon, active }) {
+          const iconElement = cloneElement(icon, { className: 'w-5 h-5' });
+          return (
+            <button className={`p-3 mb-4 rounded-xl ${active ? 'bg-cyan-600 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>
+              {iconElement}
+            </button>
+          );
+        }
+
+        function LayerToggle({ label, active, color, onClick }) {
+          return (
+            <div onClick={onClick} className={`flex items-center justify-between p-3 rounded cursor-pointer border transition-all ${active ? 'bg-slate-800 border-slate-600' : 'border-transparent hover:bg-slate-800/50'}`}>
+              <span className={`text-sm ${active ? 'text-white' : 'text-slate-400'}`}>{label}</span>
+              <div className={`w-3 h-3 rounded-full ${active ? color : 'bg-slate-700'}`}></div>
+            </div>
+          );
+        }
+
+        function TerraSenseApp() {
+          const [assets, setAssets] = useState(CITY_DATA.pipes);
+          const [selectedAssetId, setSelectedAssetId] = useState(null);
+          const [layers, setLayers] = useState({ insar: false, gpr: false, thermal: true });
+          const [aiModalOpen, setAiModalOpen] = useState(false);
+          const [aiLoading, setAiLoading] = useState(false);
+          const [aiResponse, setAiResponse] = useState('');
+          const [aiTitle, setAiTitle] = useState('');
+
+          useEffect(() => {
+            const interval = setInterval(() => {
+              setAssets(current => current.map(asset => {
+                if (asset.riskScore < 10 && Math.random() > 0.05) return asset;
+                
+                let newShift = asset.insarShift;
+                if (asset.id === 'CRITICAL-FAIL') newShift += (Math.random() * 0.1 - 0.02);
+                
+                let newThermal = asset.thermalAnomaly;
+                if (newThermal > 0) newThermal += (Math.random() * 0.4 - 0.2);
+
+                let newIntegrity = asset.integrity;
+                if (newShift > 5 && newIntegrity > 0) newIntegrity -= 0.1;
+
+                return {
+                  ...asset,
+                  insarShift: parseFloat(newShift.toFixed(2)),
+                  thermalAnomaly: Math.max(0, parseFloat(newThermal.toFixed(1))),
+                  integrity: Math.max(0, parseFloat(newIntegrity.toFixed(1)))
+                };
+              }));
+            }, 1000); 
+            return () => clearInterval(interval);
+          }, []);
+
+          const selectedAsset = useMemo(() => assets.find(a => a.id === selectedAssetId), [assets, selectedAssetId]);
+          const atRiskCount = assets.filter(a => a.riskScore > 70).length;
+
+          const handleGenerateAssetBrief = async () => {
+            if (!selectedAsset) return;
+            setAiTitle(`Brief: ${selectedAsset.id}`);
+            setAiLoading(true);
+            setAiModalOpen(true);
+            const result = await callGemini(`Briefing for ${selectedAsset.id}. Risk: ${selectedAsset.riskScore}. Shift: ${selectedAsset.insarShift}. Thermal: ${selectedAsset.thermalAnomaly}.`);
+            setAiResponse(result);
+            setAiLoading(false);
+          };
+
+          const handleGenerateSystemAudit = async () => {
+            setAiTitle("System Audit");
+            setAiLoading(true);
+            setAiModalOpen(true);
+            const result = await callGemini(`System Audit. Assets: ${assets.length}. Critical: ${atRiskCount}.`);
+            setAiResponse(result);
+            setAiLoading(false);
+          };
+
+          return (
+            <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden selection:bg-cyan-500 selection:text-white">
+              <div className="w-20 flex flex-col items-center py-6 border-r border-slate-800 bg-slate-900 z-20">
+                <div className="mb-8 p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/50">
+                  <Database className="w-6 h-6 text-cyan-400" />
+                </div>
+                <NavIcon icon={<MapIcon />} active />
+                <NavIcon icon={<Activity />} />
+                <NavIcon icon={<Layers />} />
+                <div className="mt-auto"><NavIcon icon={<ShieldCheck />} /></div>
+              </div>
+
+              <div className="flex-1 flex flex-col relative">
+                <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between px-6 z-10">
+                  <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                    ED <span className="text-cyan-400">CIA3</span>
+                    <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-normal border border-slate-700">v2.1 ORGANIC</span>
+                  </h1>
+                  <div className="flex items-center gap-6">
+                    <button onClick={handleGenerateSystemAudit} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-semibold uppercase tracking-wider transition-colors">
+                      <Sparkles className="w-3 h-3" /> Audit
+                    </button>
+                    <div className="flex items-center gap-3 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                      <span className="text-sm font-medium text-red-200">{atRiskCount} Critical</span>
+                    </div>
+                  </div>
+                </header>
+
+                <div className="flex-1 relative bg-slate-950 overflow-hidden">
+                  <svg className="w-full h-full absolute inset-0 cursor-crosshair bg-[#050b14]" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                      <radialGradient id="thermalHot" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity="0.8" />
+                        <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                      </radialGradient>
+                      <radialGradient id="thermalWarm" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.6" />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                      </radialGradient>
+                      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" strokeWidth="0.2"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                    
+                    {CITY_DATA.buildings.map(b => (
+                      <g key={b.id} style={{ transformOrigin: `${b.x + b.width/2}px ${b.y + b.height/2}px`, transform: `rotate(${b.rotation}deg)` }}>
+                        <rect x={b.x} y={b.y} width={b.width} height={b.height} fill="#0f172a" stroke="#334155" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                        <rect x={b.x + 0.5} y={b.y + 0.5} width={b.width - 1} height={b.height - 1} fill="#1e293b" className="opacity-70" vectorEffect="non-scaling-stroke" />
+                      </g>
+                    ))}
+
+                    {assets.map(asset => {
+                      const isSelected = selectedAssetId === asset.id;
+                      let baseColor = '#475569'; 
+                      if (asset.type === 'water') baseColor = '#0891b2'; 
+                      if (asset.type === 'gas') baseColor = '#d97706'; 
+                      if (asset.type === 'electric') baseColor = '#9333ea'; 
+                      if (asset.riskScore > 80) baseColor = '#ef4444';
+                      
+                      return (
+                        <g key={asset.id} onClick={() => setSelectedAssetId(asset.id)} className="cursor-pointer">
+                          <path d={asset.pathData} stroke="transparent" strokeWidth="6" fill="none" vectorEffect="non-scaling-stroke" />
+                          <path d={asset.pathData} stroke={baseColor} strokeWidth={isSelected ? 1.5 : 0.6} fill="none" vectorEffect="non-scaling-stroke" className="transition-all duration-300" />
+                          {layers.thermal && asset.thermalAnomaly > 0 && (
+                            <circle cx={(asset.start.x + asset.end.x)/2} cy={(asset.start.y + asset.end.y)/2} r={asset.thermalAnomaly} fill={asset.thermalAnomaly > 4 ? "url(#thermalHot)" : "url(#thermalWarm)"} className="animate-pulse" vectorEffect="non-scaling-stroke" />
+                          )}
+                          {layers.insar && asset.insarShift > 2 && (
+                             <circle cx={(asset.start.x + asset.end.x)/2} cy={(asset.start.y + asset.end.y)/2} r={asset.insarShift * 0.5} fill="#fbbf24" className="opacity-20 animate-pulse" vectorEffect="non-scaling-stroke" />
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  
+                  <div className="absolute bottom-6 left-6 bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-4 shadow-xl z-10 w-64">
+                     <div className="space-y-2">
+                       <LayerToggle label="InSAR" active={layers.insar} color="bg-amber-500" onClick={() => setLayers(l => ({...l, insar: !l.insar}))} />
+                       <LayerToggle label="Thermal" active={layers.thermal} color="bg-red-500" onClick={() => setLayers(l => ({...l, thermal: !l.thermal}))} />
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-96 bg-slate-900 border-l border-slate-800 flex flex-col z-20 shadow-2xl">
+                {selectedAsset ? (
+                  <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
+                    <div className="p-6 border-b border-slate-800">
+                      <button onClick={() => setSelectedAssetId(null)} className="text-slate-400 hover:text-white text-sm mb-4">← Back</button>
+                      <h2 className="text-2xl font-bold text-white">{selectedAsset.id}</h2>
+                      <div className="flex gap-2 mt-2">
+                         <span className="px-2 py-0.5 bg-slate-800 rounded text-xs uppercase text-slate-400">{selectedAsset.type}</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                      <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2"><Heart className="w-4 h-4 text-rose-500" /> Health</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between text-xs mb-1"><span className="text-slate-400">Integrity</span><span className={selectedAsset.integrity < 50 ? "text-red-400" : "text-emerald-400"}>{selectedAsset.integrity}%</span></div>
+                            <div className="h-1 bg-slate-800 rounded-full"><div className={`h-full rounded-full ${selectedAsset.integrity < 50 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${selectedAsset.integrity}%` }}></div></div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-xs mb-1"><span className="text-slate-400">Corrosion</span><span className={selectedAsset.corrosion > 60 ? "text-red-400" : "text-slate-300"}>{selectedAsset.corrosion}%</span></div>
+                            <div className="h-1 bg-slate-800 rounded-full"><div className={`h-full rounded-full ${selectedAsset.corrosion > 60 ? 'bg-red-500' : 'bg-amber-500'}`} style={{ width: `${selectedAsset.corrosion}%` }}></div></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Physics Engine</h3>
+                        <p className="text-sm font-medium text-slate-200 bg-slate-800/50 p-3 rounded border border-slate-700">{selectedAsset.prediction}</p>
+                      </div>
+                       <button onClick={handleGenerateAssetBrief} className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-900/50 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-200 rounded font-medium transition-all">
+                        <Sparkles className="w-4 h-4" /> AI Safety Brief
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto">
+                     <div className="p-6 border-b border-slate-800"><h2 className="text-lg font-bold text-white">Priority Map</h2></div>
+                     <table className="w-full text-left text-sm">
+                        <thead className="text-xs text-slate-500 bg-slate-950 uppercase sticky top-0"><tr><th className="px-6 py-3">Asset</th><th className="px-6 py-3 text-right">Risk</th></tr></thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {assets.filter(a => a.riskScore > 10).sort((a, b) => b.riskScore - a.riskScore).map(asset => (
+                            <tr key={asset.id} onClick={() => setSelectedAssetId(asset.id)} className="hover:bg-slate-800/50 cursor-pointer">
+                              <td className="px-6 py-3 font-mono text-slate-300">{asset.id}</td>
+                              <td className="px-6 py-3 text-right font-bold text-slate-200">{asset.riskScore}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                  </div>
+                )}
+              </div>
+
+              {aiModalOpen && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                  <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl p-6">
+                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white flex items-center gap-2"><Sparkles className="w-5 h-5 text-indigo-400"/> {aiTitle}</h3><button onClick={() => setAiModalOpen(false)}><X className="w-5 h-5 text-slate-400" /></button></div>
+                    {aiLoading ? <div className="flex items-center gap-2 text-indigo-400"><Loader2 className="animate-spin"/> Analyzing...</div> : <div className="prose prose-invert prose-sm">{aiResponse.split('\n').map((l, i) => <p key={i}>{l}</p>)}</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TerraSenseApp />);
+    </script>
+</body>
+</html>
