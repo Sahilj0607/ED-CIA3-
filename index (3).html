@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfraSight — Subsurface Intelligence Engine</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Leaflet CSS + JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { display: ['Sora','sans-serif'], body: ['DM Sans','sans-serif'], mono: ['IBM Plex Mono','monospace'] },
+            colors: {
+              abyss:'#030712', void:'#060c1a', surface:'#0c1425', panel:'#111b2e', raised:'#182236', border:'#1e2d45', borderLight:'#2a3f5f',
+              terra:{ green:'#22c55e', yellow:'#eab308', red:'#ef4444', cyan:'#06b6d4', blue:'#3b82f6', indigo:'#6366f1', violet:'#8b5cf6' }
+            },
+            animation: {
+              'glow':'glow 2.5s ease-in-out infinite','fade-in':'fadeIn 0.5s ease-out forwards','slide-up':'slideUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards','scale-in':'scaleIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards',
+            },
+            keyframes: {
+              glow:{'0%,100%':{opacity:'0.4'},'50%':{opacity:'1'}},fadeIn:{from:{opacity:'0'},to:{opacity:'1'}},slideUp:{from:{opacity:'0',transform:'translateY(16px)'},to:{opacity:'1',transform:'translateY(0)'}},scaleIn:{from:{opacity:'0',transform:'scale(0.95)'},to:{opacity:'1',transform:'scale(1)'}},
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        html,body,#root{height:100%}
+        body{background:#030712;color:#cbd5e1;font-family:'DM Sans',sans-serif;overflow:hidden}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(30,45,69,0.6);border-radius:99px}
+        .glass{background:rgba(12,20,37,0.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(30,45,69,0.5)}
+        .glass-solid{background:rgba(17,27,46,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(30,45,69,0.6)}
+        .glow-cyan{box-shadow:0 0 24px rgba(6,182,212,0.15),inset 0 0 24px rgba(6,182,212,0.03)}
+        .glow-red{box-shadow:0 0 24px rgba(239,68,68,0.2),inset 0 0 24px rgba(239,68,68,0.04)}
+        .glow-indigo{box-shadow:0 0 20px rgba(99,102,241,0.15)}
+        .risk-critical{background:linear-gradient(90deg,#ef4444 0%,#f97316 50%,#ef4444 100%);background-size:200% 100%;animation:shimmer 2s ease-in-out infinite}
+        @keyframes shimmer{0%,100%{background-position:0% 0%}50%{background-position:100% 0%}}
+        .hover-lift{transition:transform 0.2s ease,box-shadow 0.2s ease,border-color 0.2s ease}.hover-lift:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+        .tooltip-trigger:hover .tooltip-box{opacity:1;transform:translateX(0);pointer-events:auto}.tooltip-box{opacity:0;transform:translateX(-4px);transition:all 0.15s ease;pointer-events:none}
+        .noise-overlay{background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
+        input[type="range"]{-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;width:100%}
+        input[type="range"]::-webkit-slider-track{height:3px;background:#1e2d45;border-radius:4px}
+        input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#06b6d4;border-radius:50%;margin-top:-5.5px;box-shadow:0 0 8px rgba(6,182,212,0.4);border:2px solid #030712}
+        #error-boundary{display:none;padding:16px 20px;background:#1c0a0a;color:#fca5a5;border:1px solid rgba(239,68,68,0.3);margin:16px;font-family:'IBM Plex Mono',monospace;border-radius:12px;font-size:12px}
+
+        /* Leaflet dark overrides */
+        .leaflet-container { background: #030712 !important; }
+        .leaflet-control-zoom { border: 1px solid rgba(30,45,69,0.5) !important; }
+        .leaflet-control-zoom a { background: rgba(12,20,37,0.9) !important; color: #94a3b8 !important; border-color: rgba(30,45,69,0.4) !important; }
+        .leaflet-control-zoom a:hover { background: rgba(17,27,46,1) !important; color: #e2e8f0 !important; }
+        .leaflet-control-attribution { background: rgba(3,7,18,0.8) !important; color: #475569 !important; font-size: 9px !important; }
+        .leaflet-control-attribution a { color: #64748b !important; }
+        .leaflet-popup-content-wrapper { background: rgba(17,27,46,0.95) !important; color: #e2e8f0 !important; border: 1px solid rgba(30,45,69,0.6) !important; border-radius: 12px !important; backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; }
+        .leaflet-popup-tip { background: rgba(17,27,46,0.95) !important; border: 1px solid rgba(30,45,69,0.4) !important; }
+        .leaflet-popup-close-button { color: #64748b !important; }
+        .leaflet-popup-close-button:hover { color: #e2e8f0 !important; }
+        .pipe-pulse { animation: pipePulse 2s ease-in-out infinite; }
+        @keyframes pipePulse { 0%,100% { stroke-opacity: 0.5; } 50% { stroke-opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <div id="error-boundary"></div>
+    <script>
+        window.onerror = function(msg, src, line) {
+            const el = document.getElementById('error-boundary');
+            el.style.display = 'block';
+            el.innerHTML = '<strong>Runtime Error</strong><br/>'+msg+'<br/><small style="opacity:0.5">'+src+':'+line+'</small>';
+        };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback, useRef, Fragment } = React;
+
+        /* ══ ICONS ══ */
+        const I = ({ d, className="w-4 h-4", sw=1.8 }) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className={className}>{d}</svg>);
+        const Icons = {
+          map:(p)=><I {...p} d={<><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></>}/>,
+          layers:(p)=><I {...p} d={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}/>,
+          activity:(p)=><I {...p} d={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>}/>,
+          alert:(p)=><I {...p} d={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>}/>,
+          database:(p)=><I {...p} d={<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>}/>,
+          shield:(p)=><I {...p} d={<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></>}/>,
+          sparkles:(p)=><I {...p} d={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></>}/>,
+          x:(p)=><I {...p} d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>}/>,
+          loader:(p)=><I {...p} d={<path d="M21 12a9 9 0 1 1-6.219-8.56"/>}/>,
+          trending:(p)=><I {...p} d={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>}/>,
+          heart:(p)=><I {...p} d={<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>}/>,
+          chevLeft:(p)=><I {...p} d={<polyline points="15 18 9 12 15 6"/>}/>,
+          satellite:(p)=><I {...p} d={<><path d="M13 7 9 3 5 7l4 4"/><path d="m17 11 4 4-4 4-4-4"/><path d="m8 12 4 4 6-6-4-4Z"/><path d="m16 8 3-3"/><path d="M9 21a6 6 0 0 0-6-6"/></>}/>,
+          thermometer:(p)=><I {...p} d={<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>}/>,
+          calendar:(p)=><I {...p} d={<><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>}/>,
+          clock:(p)=><I {...p} d={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>}/>,
+          barChart:(p)=><I {...p} d={<><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>}/>,
+          file:(p)=><I {...p} d={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>}/>,
+          target:(p)=><I {...p} d={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>}/>,
+          download:(p)=><I {...p} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>}/>,
+          check:(p)=><I {...p} d={<polyline points="20 6 9 17 4 12"/>}/>,
+          radar:(p)=><I {...p} d={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/></>}/>,
+          settings:(p)=><I {...p} d={<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></>}/>,
+        };
+
+        /* ══ GEO CONFIG: Bangalore plot area (Koramangala / Indiranagar) ══ */
+        const GEO = {
+          center: [12.9716, 77.6100],
+          bounds: { latMin: 12.9650, latMax: 12.9785, lngMin: 77.6020, lngMax: 77.6185 },
+          toLatLng: (x, y) => [
+            12.9650 + (y / 100) * (12.9785 - 12.9650),
+            77.6020 + (x / 100) * (77.6185 - 77.6020)
+          ],
+        };
+
+        /* ══ PROCEDURAL CITY ENGINE (generates in 0-100, mapped to geo coords) ══ */
+        const generateCity = () => {
+          try {
+            const buildings = [], pipes = [];
+            for (let i = 0; i < 22; i++) buildings.push({ id:`BLD-${i+100}`, x:Math.random()*80+10, y:Math.random()*80+10, width:Math.random()*8+4, height:Math.random()*8+4, rotation:Math.random()*15-7.5 });
+            const hubs = [];
+            for (let i = 0; i < 14; i++) hubs.push({ x:Math.random()*85+7.5, y:Math.random()*85+7.5 });
+            let pc = 400;
+            const mkPipe = (p1,p2,type) => {
+              const w=type==='water',g=type==='gas',rb=Math.random()*20,age=Math.floor(Math.random()*40+10);
+              return { id:`${type.toUpperCase()}-${pc++}`, type, start:p1, end:p2,
+                startLatLng:GEO.toLatLng(p1.x,p1.y), endLatLng:GEO.toLatLng(p2.x,p2.y),
+                midLatLng:GEO.toLatLng((p1.x+p2.x)/2,(p1.y+p2.y)/2),
+                depth:w?2+Math.random()*1.5:1+Math.random(), material:w?'Cast Iron':(g?'Steel':'PVC Conduit'),
+                installDate:`${2026-age}-${String(Math.floor(Math.random()*12)+1).padStart(2,'0')}-15`, age, diameter:w?Math.floor(150+Math.random()*300):Math.floor(50+Math.random()*150),
+                insarShift:Math.random()*3, thermalAnomaly:Math.random()>0.82?Math.random()*5:0, gprReflection:Math.random()>0.6?'noisy':'clear', gprConfidence:Math.floor(60+Math.random()*40),
+                riskScore:Math.floor(rb+Math.random()*20), prediction:'Stable — No immediate intervention required', predictedFailure:null,
+                integrity:Math.floor(100-rb), corrosion:Math.floor(Math.random()*30), soilType:['Alluvial','Black Cotton','Laterite','Sandy'][Math.floor(Math.random()*4)],
+                trafficLoad:['Light','Moderate','Heavy'][Math.floor(Math.random()*3)], lastInspection:`2025-${String(Math.floor(Math.random()*12)+1).padStart(2,'0')}-15` };
+            };
+            hubs.forEach((h,i)=>hubs.slice(i+1,i+3).forEach(t=>{if(Math.random()>0.25)pipes.push(mkPipe(h,t,['water','gas','electric'][Math.floor(Math.random()*3)]));}));
+            pipes.push(mkPipe({x:5,y:30},{x:95,y:35},'electric'));
+            pipes.push(mkPipe({x:15,y:5},{x:20,y:95},'water'));
+            pipes.push(mkPipe({x:5,y:70},{x:92,y:65},'gas'));
+            if(pipes.length>0){const i=Math.floor(Math.random()*pipes.length);Object.assign(pipes[i],{id:'CRITICAL-001',riskScore:96,insarShift:18.2,thermalAnomaly:8.5,gprReflection:'hyperbolic',gprConfidence:34,prediction:'CRITICAL: Imminent shear failure — soil subsidence exceeding threshold. Emergency inspection required.',predictedFailure:'2026-04-12',integrity:12,corrosion:85,trafficLoad:'Heavy'});}
+            if(pipes.length>2){const j=pipes.findIndex(p=>p.id!=='CRITICAL-001');if(j>=0)Object.assign(pipes[j],{id:'WARN-047',riskScore:72,insarShift:6.1,thermalAnomaly:3.8,prediction:'WARNING: Elevated thermal signature. Possible leak. Inspect within 30 days.',predictedFailure:'2026-09-20',integrity:44,corrosion:52});}
+            return { buildings, pipes };
+          } catch(e){console.error("City Gen Error",e);return{buildings:[],pipes:[]};}
+        };
+        const CITY_DATA = generateCity();
+
+        /* ══ GEMINI API ══ */
+        const callGemini = async (prompt) => {
+          const apiKey="";
+          if(!apiKey){await new Promise(r=>setTimeout(r,1200+Math.random()*800));return `[Simulated PINN Analysis — Connect Gemini API key for live inference]\n\n${prompt}\n\nRecommendation: Based on multi-sensor fusion, the PINN model flags this asset for prioritized monitoring. InSAR displacement cross-referenced with thermal signatures indicates subsurface stress accumulation.\n\nConfidence: 87% | Model: PINN v2.1`;}
+          try{const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});if(!res.ok)throw 0;const d=await res.json();return d.candidates?.[0]?.content?.parts?.[0]?.text||"No analysis.";}catch{return "API error. Check key.";}
+        };
+
+        /* ══ UTILS ══ */
+        const riskMeta=(s)=>{
+          if(s>80)return{label:'Critical',color:'text-red-400',bg:'bg-red-500',bgSoft:'bg-red-500/10',border:'border-red-500/25',bar:'risk-critical',hex:'#ef4444',zone:'RED'};
+          if(s>50)return{label:'Warning',color:'text-amber-400',bg:'bg-amber-500',bgSoft:'bg-amber-500/10',border:'border-amber-500/25',bar:'bg-amber-500',hex:'#eab308',zone:'YELLOW'};
+          if(s>30)return{label:'Monitor',color:'text-sky-400',bg:'bg-sky-500',bgSoft:'bg-sky-500/10',border:'border-sky-500/20',bar:'bg-sky-500',hex:'#0ea5e9',zone:'YELLOW'};
+          return{label:'Safe',color:'text-emerald-400',bg:'bg-emerald-500',bgSoft:'bg-emerald-500/8',border:'border-emerald-500/20',bar:'bg-emerald-500',hex:'#22c55e',zone:'GREEN'};
+        };
+        const typeColors={water:'#0891b2',gas:'#d97706',electric:'#a855f7'};
+        const typeLabels={water:'Water Main',gas:'Gas Line',electric:'Power'};
+
+        /* ══ Bar ══ */
+        function Bar({value,max=100,colorClass,h='h-1.5'}){return<div className={`${h} bg-white/5 rounded-full overflow-hidden`}><div className={`h-full rounded-full transition-all duration-700 ${colorClass}`} style={{width:`${Math.min(100,(value/max)*100)}%`}}/></div>}
+
+        /* ══ Sidebar ══ */
+        function Sidebar({activePage,setActivePage}){
+          const nav=[{id:'map',icon:Icons.map,label:'Map'},{id:'dashboard',icon:Icons.barChart,label:'Dashboard'},{id:'assets',icon:Icons.database,label:'Assets'}];
+          return(
+            <aside className="w-[68px] flex flex-col items-center py-4 bg-surface/90 backdrop-blur-2xl border-r border-border/40 z-40">
+              <div className="mb-6 group cursor-pointer"><div className="relative p-2.5 rounded-xl bg-gradient-to-br from-terra-cyan/15 to-terra-indigo/10 border border-terra-cyan/25 group-hover:border-terra-cyan/40 transition-all"><div className="absolute inset-0 rounded-xl bg-terra-cyan/10 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"/><Icons.target className="w-5 h-5 text-terra-cyan relative z-10"/></div></div>
+              <nav className="flex flex-col gap-1 flex-1">{nav.map(item=>{const a=activePage===item.id;return(<div key={item.id} className="tooltip-trigger relative"><button onClick={()=>setActivePage(item.id)} className={`p-2.5 rounded-xl transition-all ${a?'bg-terra-cyan/15 text-terra-cyan shadow-lg shadow-terra-cyan/10':'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]'}`}><item.icon className="w-[18px] h-[18px]"/></button><div className="tooltip-box absolute left-full ml-3 top-1/2 -translate-y-1/2 z-50 px-2.5 py-1.5 bg-panel text-[11px] text-slate-200 rounded-lg whitespace-nowrap border border-border shadow-xl font-medium">{item.label}</div></div>);})}</nav>
+              <div className="flex flex-col gap-1"><button className="p-2.5 rounded-xl text-slate-600 hover:text-slate-400 hover:bg-white/[0.03] transition-all"><Icons.shield className="w-[18px] h-[18px]"/></button><button className="p-2.5 rounded-xl text-slate-600 hover:text-slate-400 hover:bg-white/[0.03] transition-all"><Icons.settings className="w-[18px] h-[18px]"/></button></div>
+            </aside>
+          );
+        }
+
+        /* ══ TopBar ══ */
+        function TopBar({stats,onAudit,activePage}){
+          const titles={map:'Subsurface Map — Bengaluru',dashboard:'System Dashboard',assets:'Asset Registry'};
+          return(
+            <header className="h-12 border-b border-border/30 glass flex items-center justify-between px-5 z-30 shrink-0">
+              <div className="flex items-center gap-4">
+                <h1 className="font-display text-[15px] font-bold tracking-tight text-white">Infra<span className="bg-gradient-to-r from-terra-cyan to-terra-blue bg-clip-text text-transparent">Sight</span></h1>
+                <div className="w-px h-5 bg-border/50"/><span className="text-xs text-slate-400 font-medium">{titles[activePage]}</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/5 border border-emerald-500/15"><div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-glow"/><span className="text-[10px] font-mono text-emerald-400 tracking-wider">{stats.total} LIVE</span></div>
+                <button onClick={onAudit} className="group flex items-center gap-1.5 px-3 py-1.5 bg-terra-indigo/10 hover:bg-terra-indigo/20 border border-terra-indigo/20 hover:border-terra-indigo/40 rounded-full text-terra-indigo text-[10px] font-bold uppercase tracking-[0.1em] transition-all"><Icons.sparkles className="w-3 h-3 group-hover:rotate-12 transition-transform"/>PINN Audit</button>
+                {stats.critical>0&&<div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/8 border border-red-500/20 rounded-full glow-red"><Icons.alert className="w-3 h-3 text-red-400 animate-glow"/><span className="text-[10px] font-mono font-bold text-red-300 tracking-wider">{stats.critical} CRITICAL</span></div>}
+              </div>
+            </header>
+          );
+        }
+
+        /* ══ Layer Controls ══ */
+        function LayerControls({layers,setLayers}){
+          const items=[{key:'insar',label:'InSAR',sub:'Satellite displacement',color:'bg-amber-500'},{key:'thermal',label:'Thermal',sub:'Heat anomalies',color:'bg-red-500'},{key:'gpr',label:'GPR',sub:'Radar reflections',color:'bg-violet-500'}];
+          return(
+            <div className="absolute bottom-5 left-5 glass-solid rounded-2xl p-3.5 shadow-2xl z-[1000] w-56 animate-slide-up">
+              <div className="flex items-center gap-2 mb-2.5 pb-2 border-b border-white/5"><Icons.layers className="w-3 h-3 text-slate-500"/><span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 font-display">Data Fusion Layers</span></div>
+              {items.map(it=>(<div key={it.key} onClick={()=>setLayers(l=>({...l,[it.key]:!l[it.key]}))} className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all mb-0.5 ${layers[it.key]?'bg-white/[0.04] border-white/10':'border-transparent hover:bg-white/[0.02]'}`}><div className={`w-2 h-2 rounded-full transition-all ${layers[it.key]?it.color:'bg-slate-700'}`}/><div className="flex-1"><span className={`text-xs font-medium ${layers[it.key]?'text-white':'text-slate-500'}`}>{it.label}</span><p className="text-[9px] text-slate-600">{it.sub}</p></div><span className={`text-[9px] font-mono uppercase tracking-widest ${layers[it.key]?'text-slate-400':'text-slate-700'}`}>{layers[it.key]?'on':'off'}</span></div>))}
+            </div>
+          );
+        }
+
+        /* ══ 4D Time Slider ══ */
+        function TimeSlider({timeOffset,setTimeOffset}){
+          const months=['Now','+1mo','+2mo','+3mo','+6mo','+12mo'];
+          return(
+            <div className="absolute bottom-5 right-5 glass-solid rounded-2xl p-3.5 shadow-2xl z-[1000] w-52 animate-slide-up">
+              <div className="flex items-center gap-2 mb-3"><Icons.clock className="w-3 h-3 text-terra-cyan"/><span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 font-display">4D Prediction</span></div>
+              <div className="flex items-center justify-between mb-2"><span className="text-lg font-bold font-mono text-terra-cyan">{months[timeOffset]}</span><span className="text-[9px] text-slate-600 font-mono">PINN Model</span></div>
+              <input type="range" min="0" max="5" value={timeOffset} onChange={e=>setTimeOffset(Number(e.target.value))}/>
+              <div className="flex justify-between mt-1"><span className="text-[8px] text-slate-600">Present</span><span className="text-[8px] text-slate-600">+12 months</span></div>
+            </div>
+          );
+        }
+
+        /* ══ LEAFLET MAP CANVAS ══ */
+        function MapCanvas({assets,selectedId,onSelect,layers,setLayers,timeOffset,setTimeOffset}){
+          const mapRef = useRef(null);
+          const mapInstanceRef = useRef(null);
+          const layerGroupRef = useRef(null);
+
+          // Initialize Leaflet map
+          useEffect(()=>{
+            if(mapInstanceRef.current) return;
+            const map = L.map(mapRef.current, {
+              center: GEO.center,
+              zoom: 15,
+              zoomControl: true,
+              attributionControl: true,
+            });
+
+            // Dark tile layer (CartoDB Dark Matter)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+              subdomains: 'abcd',
+              maxZoom: 19,
+            }).addTo(map);
+
+            layerGroupRef.current = L.layerGroup().addTo(map);
+            mapInstanceRef.current = map;
+
+            return ()=>{ map.remove(); mapInstanceRef.current=null; };
+          },[]);
+
+          // Render pipe overlays on the Leaflet map
+          useEffect(()=>{
+            if(!mapInstanceRef.current || !layerGroupRef.current) return;
+            const lg = layerGroupRef.current;
+            lg.clearLayers();
+
+            assets.forEach(asset=>{
+              const sel = selectedId === asset.id;
+              const crit = asset.riskScore > 80;
+              const warn = asset.riskScore > 50;
+              const tm = 1 + timeOffset * 0.06 * (asset.riskScore / 100);
+              const pr = Math.min(100, Math.floor(asset.riskScore * tm));
+              const projCrit = pr > 80;
+
+              const baseColor = (crit || projCrit) ? '#ef4444' : (typeColors[asset.type] || '#475569');
+              const weight = sel ? 5 : (crit ? 3 : 2);
+              const opacity = sel ? 1 : (crit ? 0.85 : 0.5);
+
+              // Pipe polyline
+              const line = L.polyline([asset.startLatLng, asset.endLatLng], {
+                color: baseColor, weight, opacity,
+                dashArray: sel ? null : (crit ? '8 4' : null),
+                className: crit ? 'pipe-pulse' : '',
+              });
+              line.on('click', ()=> onSelect(asset.id));
+              line.bindTooltip(`<div style="font-family:'IBM Plex Mono',monospace;font-size:11px"><strong>${asset.id}</strong><br/><span style="color:${baseColor}">${typeLabels[asset.type]}</span> · Risk: <strong>${asset.riskScore}</strong></div>`, { sticky: true, direction: 'top', offset: [0,-10] });
+              lg.addLayer(line);
+
+              // Selection glow
+              if(sel){
+                const glowLine = L.polyline([asset.startLatLng, asset.endLatLng], { color: '#06b6d4', weight: 12, opacity: 0.2 });
+                lg.addLayer(glowLine);
+              }
+
+              // Critical glow circle
+              if(crit || projCrit){
+                const cGlow = L.circleMarker(asset.midLatLng, { radius: projCrit ? 18 : 14, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.12, weight: 1, opacity: 0.3, className: 'pipe-pulse' });
+                lg.addLayer(cGlow);
+              }
+
+              // Thermal overlay
+              if(layers.thermal && asset.thermalAnomaly > 0){
+                const tR = Math.max(6, asset.thermalAnomaly * 4 * (1 + timeOffset * 0.08));
+                const tColor = asset.thermalAnomaly > 4 ? '#ef4444' : '#f59e0b';
+                const tc = L.circleMarker(asset.midLatLng, { radius: tR, color: tColor, fillColor: tColor, fillOpacity: 0.2, weight: 1, opacity: 0.4, className: 'pipe-pulse' });
+                lg.addLayer(tc);
+              }
+
+              // InSAR overlay
+              if(layers.insar && asset.insarShift > 2){
+                const iR = Math.max(5, asset.insarShift * 3);
+                const ic = L.circleMarker(asset.midLatLng, { radius: iR, color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.1, weight: 1, opacity: 0.3 });
+                lg.addLayer(ic);
+              }
+
+              // GPR overlay
+              if(layers.gpr && (asset.gprReflection === 'noisy' || asset.gprReflection === 'hyperbolic')){
+                const gR = asset.gprReflection === 'hyperbolic' ? 10 : 6;
+                const gc = L.circleMarker(asset.midLatLng, { radius: gR, color: '#8b5cf6', fillColor: '#8b5cf6', fillOpacity: 0.15, weight: 1, opacity: 0.4, className: asset.gprReflection === 'hyperbolic' ? 'pipe-pulse' : '' });
+                lg.addLayer(gc);
+              }
+            });
+          },[assets, selectedId, layers, timeOffset, onSelect]);
+
+          // Pan to selected asset
+          useEffect(()=>{
+            if(!mapInstanceRef.current || !selectedId) return;
+            const asset = assets.find(a=>a.id===selectedId);
+            if(asset) mapInstanceRef.current.panTo(asset.midLatLng, { animate: true, duration: 0.5 });
+          },[selectedId, assets]);
+
+          return(
+            <div className="flex-1 relative bg-abyss overflow-hidden">
+              <div ref={mapRef} className="absolute inset-0 z-0" style={{background:'#030712'}}/>
+              <LayerControls layers={layers} setLayers={setLayers}/>
+              <TimeSlider timeOffset={timeOffset} setTimeOffset={setTimeOffset}/>
+              {/* Top labels */}
+              <div className="absolute top-3 left-5 font-mono text-[9px] text-white/40 tracking-[0.2em] z-[1000] uppercase bg-abyss/60 backdrop-blur px-2.5 py-1 rounded-lg border border-white/5">
+                Koramangala / Indiranagar • Bengaluru Urban
+              </div>
+              <div className="absolute top-3 right-5 font-mono text-[9px] text-white/40 z-[1000] bg-abyss/60 backdrop-blur px-2.5 py-1 rounded-lg border border-white/5">
+                12.9716°N, 77.6100°E
+              </div>
+            </div>
+          );
+        }
+
+        /* ══ Asset Detail Panel ══ */
+        function AssetDetail({asset,onClose,onBrief}){
+          if(!asset)return null;
+          const r=riskMeta(asset.riskScore),crit=asset.riskScore>80;
+          return(
+            <div className="flex flex-col h-full animate-fade-in">
+              <div className="p-4 border-b border-white/5 shrink-0">
+                <button onClick={onClose} className="group flex items-center gap-1 text-slate-500 hover:text-white text-[11px] mb-3 transition-colors"><Icons.chevLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform"/><span className="font-medium">Back</span></button>
+                <div className="flex items-start justify-between">
+                  <div><h2 className="text-lg font-bold text-white font-display tracking-tight">{asset.id}</h2>
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-mono uppercase tracking-wider bg-white/5 border border-white/5" style={{color:typeColors[asset.type]}}>{typeLabels[asset.type]}</span>
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-mono text-slate-500 bg-white/[0.03]">{asset.material}</span>
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-mono text-slate-500 bg-white/[0.03]">{asset.diameter}mm</span>
+                    </div>
+                  </div>
+                  <div className={`relative px-3 py-2 rounded-xl ${r.bgSoft} border ${r.border}`}>{crit&&<div className="absolute inset-0 rounded-xl bg-red-500/5 blur-md"/>}<div className="relative text-center"><div className={`text-xl font-bold font-mono ${r.color}`}>{asset.riskScore}</div><div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">{r.zone}</div></div></div>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {crit&&<div className="p-3.5 rounded-xl bg-red-500/5 border border-red-500/20 glow-red animate-slide-up"><div className="flex items-center gap-2 mb-1.5"><Icons.alert className="w-3.5 h-3.5 text-red-400"/><span className="text-[10px] font-bold uppercase tracking-wider text-red-400 font-display">Critical Alert</span></div><p className="text-[12px] text-red-200/80 leading-relaxed">{asset.prediction}</p>{asset.predictedFailure&&<p className="text-[10px] text-red-400/60 mt-2 font-mono">Predicted failure: {asset.predictedFailure}</p>}</div>}
+                <div className="rounded-xl bg-white/[0.02] p-3.5 border border-white/5">
+                  <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-3 font-display flex items-center gap-1.5"><Icons.target className="w-3 h-3 text-terra-cyan"/>Terra-Risk Factors</h3>
+                  <div className="space-y-3">
+                    <div><div className="flex justify-between text-[11px] mb-1.5"><span className="text-slate-400">Integrity</span><span className={`font-mono font-bold ${asset.integrity<50?'text-red-400':'text-emerald-400'}`}>{asset.integrity}%</span></div><Bar value={asset.integrity} colorClass={asset.integrity<50?'risk-critical':'bg-gradient-to-r from-emerald-600 to-emerald-400'}/></div>
+                    <div><div className="flex justify-between text-[11px] mb-1.5"><span className="text-slate-400">Corrosion</span><span className={`font-mono font-bold ${asset.corrosion>60?'text-red-400':'text-amber-400'}`}>{asset.corrosion}%</span></div><Bar value={asset.corrosion} colorClass={asset.corrosion>60?'risk-critical':'bg-gradient-to-r from-amber-600 to-amber-400'}/></div>
+                    <div><div className="flex justify-between text-[11px] mb-1.5"><span className="text-slate-400">GPR Confidence</span><span className={`font-mono font-bold ${asset.gprConfidence<50?'text-red-400':'text-sky-400'}`}>{asset.gprConfidence}%</span></div><Bar value={asset.gprConfidence} colorClass={asset.gprConfidence<50?'bg-red-500':'bg-gradient-to-r from-sky-600 to-sky-400'}/></div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{l:'InSAR',v:asset.insarShift.toFixed(1),u:'mm',w:asset.insarShift>5,ic:Icons.satellite},{l:'Thermal',v:asset.thermalAnomaly.toFixed(1),u:'°C Δ',w:asset.thermalAnomaly>3,ic:Icons.thermometer},{l:'Depth',v:asset.depth.toFixed(1),u:'m',w:false,ic:Icons.layers},{l:'Age',v:asset.age,u:'yrs',w:asset.age>30,ic:Icons.calendar}].map(s=>(
+                    <div key={s.l} className="bg-white/[0.02] rounded-xl p-3 border border-white/5 hover:border-white/10 transition-all hover-lift"><div className="flex items-center justify-between mb-1.5"><span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{s.l}</span><s.ic className={`w-3 h-3 ${s.w?'text-amber-400':'text-slate-600'}`}/></div><span className={`text-lg font-bold font-mono ${s.w?'text-amber-400':'text-slate-300'}`}>{s.v}</span><span className="text-[9px] text-slate-600 ml-0.5">{s.u}</span></div>
+                  ))}
+                </div>
+                <div className="rounded-xl bg-white/[0.02] p-3.5 border border-white/5"><h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2.5 font-display flex items-center gap-1.5"><Icons.file className="w-3 h-3"/>Record</h3>{[['Soil',asset.soilType],['Traffic',asset.trafficLoad],['GPR Signal',asset.gprReflection],['Installed',asset.installDate],['Inspected',asset.lastInspection],['Coords',`${asset.midLatLng[0].toFixed(4)}°N, ${asset.midLatLng[1].toFixed(4)}°E`]].map(([k,v])=><div key={k} className="flex justify-between text-[11px] py-0.5"><span className="text-slate-500">{k}</span><span className={`font-mono ${v==='hyperbolic'||v==='Heavy'?'text-red-400':'text-slate-300'}`}>{v}</span></div>)}</div>
+                {!crit&&<div className="rounded-xl bg-white/[0.02] p-3.5 border border-white/5"><h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-2 font-display flex items-center gap-1.5"><Icons.trending className="w-3 h-3"/>PINN Prediction</h3><p className="text-[12px] text-slate-300 leading-relaxed">{asset.prediction}</p>{asset.predictedFailure&&<p className="text-[10px] text-amber-400/70 mt-1.5 font-mono">Est. failure: {asset.predictedFailure}</p>}</div>}
+                <button onClick={onBrief} className="w-full group flex items-center justify-center gap-2 py-3 bg-terra-indigo/8 hover:bg-terra-indigo/15 border border-terra-indigo/20 hover:border-terra-indigo/40 text-terra-indigo rounded-xl font-semibold transition-all glow-indigo hover-lift"><Icons.sparkles className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform"/><span className="text-[12px]">AI Safety Brief</span></button>
+              </div>
+            </div>
+          );
+        }
+
+        /* ══ Priority Table ══ */
+        function PriorityTable({assets,onSelect,sq,setSq}){
+          const f=useMemo(()=>{let l=assets.filter(a=>a.riskScore>5).sort((a,b)=>b.riskScore-a.riskScore);if(sq){const q=sq.toLowerCase();l=l.filter(a=>a.id.toLowerCase().includes(q)||a.type.includes(q));}return l;},[assets,sq]);
+          return(
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="p-4 border-b border-white/5 shrink-0"><h2 className="text-sm font-bold text-white font-display tracking-tight mb-0.5">Priority Map</h2><p className="text-[10px] text-slate-500">{f.length} assets by Terra-Risk</p><div className="mt-3"><input value={sq} onChange={e=>setSq(e.target.value)} placeholder="Search assets..." className="w-full bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-terra-cyan/30 transition-colors font-mono"/></div></div>
+              <div className="flex-1 overflow-y-auto">{f.map(a=>{const r=riskMeta(a.riskScore);return(<div key={a.id} onClick={()=>onSelect(a.id)} className={`group flex items-center gap-2.5 px-4 py-2.5 cursor-pointer transition-all border-b border-white/[0.02] hover:bg-white/[0.03] ${a.riskScore>80?'bg-red-500/[0.02]':''}`}><div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.bg} ${a.riskScore>80?'animate-glow':''}`}/><div className="flex-1 min-w-0"><span className="text-[11px] font-mono text-slate-300 group-hover:text-white transition-colors">{a.id}</span><span className="ml-2 text-[9px] uppercase tracking-wide" style={{color:typeColors[a.type]}}>{a.type}</span></div><div className="flex items-center gap-2 shrink-0"><div className="w-12"><Bar value={a.riskScore} colorClass={r.bar} h="h-1"/></div><span className={`text-[11px] font-bold font-mono w-6 text-right ${r.color}`}>{a.riskScore}</span></div></div>);})}</div>
+            </div>
+          );
+        }
+
+        /* ══ Right Panel ══ */
+        function RightPanel({selectedAsset,assets,onSelect,onDeselect,onBrief,sq,setSq}){
+          return<div className="w-[340px] bg-surface/60 backdrop-blur-2xl border-l border-border/30 flex flex-col z-20 shadow-2xl shadow-black/40 shrink-0">{selectedAsset?<AssetDetail asset={selectedAsset} onClose={onDeselect} onBrief={onBrief}/>:<PriorityTable assets={assets} onSelect={onSelect} sq={sq} setSq={setSq}/>}</div>;
+        }
+
+        /* ══ Dashboard ══ */
+        function DashboardView({assets}){
+          const s=useMemo(()=>{const t=assets.length,c=assets.filter(a=>a.riskScore>80).length,w=assets.filter(a=>a.riskScore>50&&a.riskScore<=80).length,sf=assets.filter(a=>a.riskScore<=30).length,ar=Math.round(assets.reduce((x,a)=>x+a.riskScore,0)/t),ai=Math.round(assets.reduce((x,a)=>x+a.integrity,0)/t),bt={water:assets.filter(a=>a.type==='water').length,gas:assets.filter(a=>a.type==='gas').length,electric:assets.filter(a=>a.type==='electric').length},ta=assets.filter(a=>a.thermalAnomaly>2).length,ia=assets.filter(a=>a.insarShift>4).length;return{t,c,w,sf,ar,ai,bt,ta,ia};},[assets]);
+          const MC=({label,value,sub,icon:Ic,color='text-slate-300',glow=''})=>(<div className={`rounded-2xl bg-white/[0.02] p-4 border border-white/5 hover:border-white/10 transition-all hover-lift ${glow}`}><div className="flex items-center justify-between mb-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 font-display">{label}</span>{Ic&&<Ic className={`w-4 h-4 ${color}`}/>}</div><div className={`text-3xl font-bold font-mono ${color}`}>{value}</div>{sub&&<p className="text-[10px] text-slate-500 mt-1">{sub}</p>}</div>);
+          return(
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in">
+              <div><h2 className="text-xl font-bold text-white font-display tracking-tight mb-1">System Overview</h2><p className="text-xs text-slate-500">Real-time PINN analysis — Bengaluru Urban sector</p></div>
+              <div className="grid grid-cols-4 gap-3"><MC label="Total Assets" value={s.t} sub="Monitored segments" icon={Icons.database} color="text-terra-cyan"/><MC label="Critical" value={s.c} sub="Immediate attention" icon={Icons.alert} color="text-red-400" glow={s.c>0?'glow-red':''}/><MC label="Avg Risk" value={s.ar} sub="Fleet-wide" icon={Icons.activity} color={s.ar>40?'text-amber-400':'text-emerald-400'}/><MC label="Avg Integrity" value={`${s.ai}%`} sub="Structural health" icon={Icons.heart} color={s.ai<60?'text-amber-400':'text-emerald-400'}/></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-2xl bg-white/[0.02] p-4 border border-white/5"><h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] font-display mb-4">By Type</h3>{Object.entries(s.bt).map(([t,c])=><div key={t} className="flex items-center justify-between py-2 border-b border-white/[0.03] last:border-0"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{background:typeColors[t]}}/><span className="text-xs text-slate-300 capitalize">{t}</span></div><span className="text-xs font-mono font-bold text-slate-300">{c}</span></div>)}</div>
+                <div className="rounded-2xl bg-white/[0.02] p-4 border border-white/5"><h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] font-display mb-4">Sensor Alerts</h3><div className="space-y-3"><div><div className="flex justify-between text-[11px] mb-1"><span className="text-slate-400">Thermal</span><span className="font-mono font-bold text-red-400">{s.ta}</span></div><Bar value={s.ta} max={s.t} colorClass="bg-red-500"/></div><div><div className="flex justify-between text-[11px] mb-1"><span className="text-slate-400">InSAR</span><span className="font-mono font-bold text-amber-400">{s.ia}</span></div><Bar value={s.ia} max={s.t} colorClass="bg-amber-500"/></div></div></div>
+                <div className="rounded-2xl bg-white/[0.02] p-4 border border-white/5"><h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] font-display mb-4">Risk Distribution</h3><div className="space-y-2">{[{l:'Critical (71-100)',c:s.c,cl:'bg-red-500',tc:'text-red-400'},{l:'Warning (31-70)',c:s.w,cl:'bg-amber-500',tc:'text-amber-400'},{l:'Safe (0-30)',c:s.sf,cl:'bg-emerald-500',tc:'text-emerald-400'}].map(r=><div key={r.l}><div className="flex justify-between text-[11px] mb-1"><span className="text-slate-400">{r.l}</span><span className={`font-mono font-bold ${r.tc}`}>{r.c}</span></div><Bar value={r.c} max={s.t} colorClass={r.cl}/></div>)}</div></div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden"><div className="px-4 py-3 border-b border-white/5"><h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] font-display">Top 5 Risk Assets</h3></div><table className="w-full text-xs"><thead><tr className="text-[9px] text-slate-500 uppercase tracking-wider"><th className="text-left px-4 py-2.5">ID</th><th className="text-left px-4 py-2.5">Type</th><th className="text-left px-4 py-2.5">Material</th><th className="text-right px-4 py-2.5">Risk</th><th className="text-right px-4 py-2.5">Integrity</th></tr></thead><tbody className="divide-y divide-white/[0.03]">{[...assets].sort((a,b)=>b.riskScore-a.riskScore).slice(0,5).map(a=>{const r=riskMeta(a.riskScore);return<tr key={a.id} className="hover:bg-white/[0.02]"><td className="px-4 py-2.5 font-mono text-slate-300">{a.id}</td><td className="px-4 py-2.5 capitalize" style={{color:typeColors[a.type]}}>{a.type}</td><td className="px-4 py-2.5 text-slate-400">{a.material}</td><td className={`px-4 py-2.5 text-right font-mono font-bold ${r.color}`}>{a.riskScore}</td><td className={`px-4 py-2.5 text-right font-mono ${a.integrity<50?'text-red-400':'text-slate-300'}`}>{a.integrity}%</td></tr>})}</tbody></table></div>
+            </div>
+          );
+        }
+
+        /* ══ Asset Registry ══ */
+        function AssetRegistryView({assets,onSelect}){
+          const[filter,setFilter]=useState('all');const[sort,setSort]=useState('risk');
+          const f=useMemo(()=>{let l=[...assets];if(filter!=='all')l=l.filter(a=>a.type===filter);if(sort==='risk')l.sort((a,b)=>b.riskScore-a.riskScore);else if(sort==='age')l.sort((a,b)=>b.age-a.age);else l.sort((a,b)=>a.integrity-b.integrity);return l;},[assets,filter,sort]);
+          return(
+            <div className="flex-1 flex flex-col overflow-hidden animate-fade-in">
+              <div className="p-6 pb-4 shrink-0"><h2 className="text-xl font-bold text-white font-display tracking-tight mb-1">Asset Registry</h2><p className="text-xs text-slate-500 mb-4">{assets.length} subsurface segments — Bengaluru</p>
+                <div className="flex items-center gap-2">{['all','water','gas','electric'].map(fl=><button key={fl} onClick={()=>setFilter(fl)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${filter===fl?'bg-terra-cyan/15 text-terra-cyan border border-terra-cyan/25':'text-slate-500 hover:text-slate-300 border border-transparent hover:bg-white/[0.03]'}`}>{fl==='all'?'All':fl}</button>)}<div className="flex-1"/><select value={sort} onChange={e=>setSort(e.target.value)} className="bg-white/[0.03] border border-white/5 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-400 font-mono focus:outline-none"><option value="risk">Risk ↓</option><option value="age">Age ↓</option><option value="integrity">Integrity ↑</option></select></div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 pb-6"><div className="grid grid-cols-3 gap-3">{f.map(a=>{const r=riskMeta(a.riskScore);return<div key={a.id} onClick={()=>onSelect(a.id)} className={`rounded-xl bg-white/[0.02] p-3.5 border border-white/5 hover:border-white/10 cursor-pointer transition-all hover-lift ${a.riskScore>80?'glow-red':''}`}><div className="flex items-center justify-between mb-2"><span className="text-[11px] font-mono font-bold text-white">{a.id}</span><span className={`text-xs font-bold font-mono ${r.color}`}>{a.riskScore}</span></div><div className="flex items-center gap-1.5 mb-3"><span className="text-[9px] uppercase tracking-wider" style={{color:typeColors[a.type]}}>{a.type}</span><span className="text-slate-700">·</span><span className="text-[9px] text-slate-500">{a.material}</span></div><Bar value={a.riskScore} colorClass={r.bar}/><div className="flex justify-between mt-2 text-[9px] text-slate-500"><span>Int: {a.integrity}%</span><span>{a.age}y old</span></div></div>})}</div></div>
+            </div>
+          );
+        }
+
+        /* ══ AI Modal ══ */
+        function AIModal({isOpen,onClose,title,loading,response}){
+          if(!isOpen)return null;
+          return(
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-8 animate-fade-in"><div className="absolute inset-0 bg-abyss/85 backdrop-blur-lg" onClick={onClose}/>
+              <div className="relative glass-solid w-full max-w-xl rounded-2xl shadow-2xl shadow-black/60 overflow-hidden animate-scale-in">
+                <div className="flex justify-between items-center p-5 border-b border-white/5"><div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-terra-indigo/10 border border-terra-indigo/20"><Icons.sparkles className="w-4 h-4 text-terra-indigo"/></div><div><h3 className="font-bold text-white font-display text-sm">{title}</h3><p className="text-[9px] text-slate-500 mt-0.5 font-mono">PINN v2.1 • Multi-Sensor Fusion</p></div></div><button onClick={onClose} className="p-2 rounded-lg hover:bg-white/5 transition-colors"><Icons.x className="w-4 h-4 text-slate-500 hover:text-white transition-colors"/></button></div>
+                <div className="p-5 max-h-[55vh] overflow-y-auto">
+                  {loading?<div className="flex flex-col items-center justify-center py-12 gap-4"><div className="relative"><div className="absolute inset-0 bg-terra-indigo/20 rounded-full blur-xl animate-pulse"/><Icons.loader className="w-7 h-7 text-terra-indigo animate-spin relative"/></div><div className="text-center"><p className="text-xs font-medium text-terra-indigo">Running PINN analysis...</p><p className="text-[10px] text-slate-500 mt-1">Cross-referencing sensor fusion data</p></div></div>
+                  :<div className="space-y-2.5">{response.split('\n').filter(Boolean).map((l,i)=><p key={i} className="text-[12px] text-slate-300 leading-relaxed">{l}</p>)}</div>}
+                </div>
+                {!loading&&<div className="px-5 py-3 border-t border-white/5 flex items-center justify-between"><div className="flex items-center gap-2"><Icons.check className="w-3 h-3 text-emerald-400"/><span className="text-[9px] text-slate-500 font-mono">Analysis complete</span></div><div className="flex gap-2"><button className="px-3 py-1.5 text-[10px] font-medium text-slate-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] rounded-lg border border-white/5 transition-all flex items-center gap-1.5"><Icons.download className="w-3 h-3"/>Export</button><button onClick={onClose} className="px-3 py-1.5 text-[10px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">Close</button></div></div>}
+              </div>
+            </div>
+          );
+        }
+
+        /* ══ ROOT APP ══ */
+        function InfraSightApp(){
+          const[assets,setAssets]=useState(CITY_DATA.pipes);
+          const[selectedAssetId,setSelectedAssetId]=useState(null);
+          const[layers,setLayers]=useState({insar:false,gpr:false,thermal:true});
+          const[activePage,setActivePage]=useState('map');
+          const[timeOffset,setTimeOffset]=useState(0);
+          const[sq,setSq]=useState('');
+          const[aiOpen,setAiOpen]=useState(false);
+          const[aiLoading,setAiLoading]=useState(false);
+          const[aiResponse,setAiResponse]=useState('');
+          const[aiTitle,setAiTitle]=useState('');
+
+          // Risk simulation loop
+          useEffect(()=>{
+            const iv=setInterval(()=>{setAssets(cur=>cur.map(a=>{
+              if(a.riskScore<10&&Math.random()>0.05)return a;
+              let ns=a.insarShift;if(a.id==='CRITICAL-001')ns+=(Math.random()*0.1-0.02);
+              let nt=a.thermalAnomaly;if(nt>0)nt+=(Math.random()*0.4-0.2);
+              let ni=a.integrity;if(ns>5&&ni>0)ni-=0.1;
+              return{...a,insarShift:parseFloat(ns.toFixed(2)),thermalAnomaly:Math.max(0,parseFloat(nt.toFixed(1))),integrity:Math.max(0,parseFloat(ni.toFixed(1)))};
+            }));},1000);return()=>clearInterval(iv);
+          },[]);
+
+          const selectedAsset=useMemo(()=>assets.find(a=>a.id===selectedAssetId),[assets,selectedAssetId]);
+          const stats=useMemo(()=>({total:assets.length,critical:assets.filter(a=>a.riskScore>70).length}),[assets]);
+
+          const handleBrief=useCallback(async()=>{
+            if(!selectedAsset)return;setAiTitle(`Safety Brief: ${selectedAsset.id}`);setAiLoading(true);setAiOpen(true);
+            const r=await callGemini(`Safety brief for ${selectedAsset.id} at coordinates ${selectedAsset.midLatLng[0].toFixed(4)}°N, ${selectedAsset.midLatLng[1].toFixed(4)}°E (Bengaluru).\nType: ${typeLabels[selectedAsset.type]}\nMaterial: ${selectedAsset.material}\nTerra-Risk: ${selectedAsset.riskScore}/100 (${riskMeta(selectedAsset.riskScore).zone})\nIntegrity: ${selectedAsset.integrity}%\nCorrosion: ${selectedAsset.corrosion}%\nInSAR: ${selectedAsset.insarShift}mm\nThermal: ${selectedAsset.thermalAnomaly}°C\nGPR: ${selectedAsset.gprReflection} (${selectedAsset.gprConfidence}%)\nSoil: ${selectedAsset.soilType}\nTraffic: ${selectedAsset.trafficLoad}\nAge: ${selectedAsset.age}y\nPrediction: ${selectedAsset.prediction}\n\nProvide: Risk Assessment, Root Cause, Actions, Timeline.`);
+            setAiResponse(r);setAiLoading(false);
+          },[selectedAsset]);
+
+          const handleAudit=useCallback(async()=>{
+            setAiTitle("System-Wide PINN Audit");setAiLoading(true);setAiOpen(true);
+            const ca=assets.filter(a=>a.riskScore>70).map(a=>`${a.id}(R:${a.riskScore})`).join(', ');
+            const r=await callGemini(`System audit for Bengaluru Urban subsurface network.\nTotal: ${assets.length}\nCritical: ${stats.critical}\nIDs: ${ca||'None'}\nAvg Integrity: ${Math.round(assets.reduce((s,a)=>s+a.integrity,0)/assets.length)}%\nThermal: ${assets.filter(a=>a.thermalAnomaly>2).length}\nInSAR: ${assets.filter(a=>a.insarShift>4).length}\n\nProvide: Fleet Health, Top Risks, Actions, 30-Day Plan.`);
+            setAiResponse(r);setAiLoading(false);
+          },[assets,stats.critical]);
+
+          const handleAssetSelect=useCallback((id)=>{setSelectedAssetId(id);if(activePage!=='map')setActivePage('map');},[activePage]);
+
+          return(
+            <div className="flex h-screen bg-abyss text-slate-300 font-body overflow-hidden selection:bg-terra-cyan/30 selection:text-white">
+              <div className="fixed inset-0 noise-overlay pointer-events-none z-[9999] opacity-30"/>
+              <Sidebar activePage={activePage} setActivePage={setActivePage}/>
+              <div className="flex-1 flex flex-col relative min-w-0">
+                <TopBar stats={stats} onAudit={handleAudit} activePage={activePage}/>
+                <div className="flex-1 flex relative overflow-hidden">
+                  {activePage==='map'&&<><MapCanvas assets={assets} selectedId={selectedAssetId} onSelect={setSelectedAssetId} layers={layers} setLayers={setLayers} timeOffset={timeOffset} setTimeOffset={setTimeOffset}/><RightPanel selectedAsset={selectedAsset} assets={assets} onSelect={setSelectedAssetId} onDeselect={()=>setSelectedAssetId(null)} onBrief={handleBrief} sq={sq} setSq={setSq}/></>}
+                  {activePage==='dashboard'&&<DashboardView assets={assets}/>}
+                  {activePage==='assets'&&<AssetRegistryView assets={assets} onSelect={handleAssetSelect}/>}
+                </div>
+                <AIModal isOpen={aiOpen} onClose={()=>setAiOpen(false)} title={aiTitle} loading={aiLoading} response={aiResponse}/>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<InfraSightApp />);
+    </script>
+</body>
+</html>
